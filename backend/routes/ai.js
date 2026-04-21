@@ -6,7 +6,12 @@ import Asset from '../models/Asset.js';
 import Beneficiary from '../models/Beneficiary.js';
 
 const router = express.Router();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const isGemini = !!process.env.GEMINI_API_KEY;
+const openai = new OpenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: isGemini ? 'https://generativelanguage.googleapis.com/v1beta/openai/' : 'https://api.openai.com/v1'
+});
 
 router.post('/generate-letter', auth, async (req, res) => {
   try {
@@ -39,7 +44,7 @@ Write as if this will actually be read after the sender is gone. Make it beautif
     let letter = '';
     try {
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: isGemini ? 'gemini-2.5-flash' : 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.8,
       });
@@ -91,7 +96,7 @@ Format each as:
 Keep it concise and practical.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: isGemini ? 'gemini-2.5-flash' : 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
     });
 
