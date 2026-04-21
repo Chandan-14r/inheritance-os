@@ -3,6 +3,7 @@ import { useData } from '../DataContext';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Mail, Download, Copy, Check, ChevronRight } from 'lucide-react';
+import jsPDF from 'jspdf';
 
 function TypewriterText({ text, speed = 8 }) {
   const [displayed, setDisplayed] = useState('');
@@ -76,14 +77,33 @@ export default function Letters() {
 
   const downloadLetter = () => {
     if (!selected?.aiLetter) return;
-    const blob = new Blob([selected.aiLetter], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `letter-${selected.name.replace(/\s+/g, '-').toLowerCase()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Letter downloaded');
+    
+    const doc = new jsPDF();
+    
+    // Add letterhead/title
+    doc.setFont("times", "bold");
+    doc.setFontSize(16);
+    doc.text(`A Letter to ${selected.name}`, 20, 20);
+    
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor(40, 40, 40);
+    
+    // Auto-wrap text at 170mm (A4 width is 210mm)
+    const lines = doc.splitTextToSize(selected.aiLetter, 170); 
+    let y = 35;
+    
+    for (let i = 0; i < lines.length; i++) {
+        if (y > 280) {
+            doc.addPage();
+            y = 20; // reset Y on new page
+        }
+        doc.text(lines[i], 20, y);
+        y += 7; // roughly 1.5 line height
+    }
+
+    doc.save(`letter-${selected.name.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+    toast.success('Letter downloaded as PDF');
   };
 
   return (

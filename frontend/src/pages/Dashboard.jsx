@@ -1,8 +1,9 @@
 import { useData } from '../DataContext';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { motion } from 'framer-motion';
-import { Wallet, AlertTriangle, Users, Shield, TrendingUp, ArrowUpRight, CheckCircle, ArrowUp, Sparkles } from 'lucide-react';
+import { Wallet, AlertTriangle, Users, Shield, TrendingUp, ArrowUpRight, CheckCircle, ArrowUp, Sparkles, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 
 const COLORS = ['#4B6EF5', '#00C48C', '#F59E0B', '#F6465D', '#8B5CF6', '#06B6D4', '#EC4899'];
@@ -60,6 +61,27 @@ export default function Dashboard() {
   const lettersGenerated = beneficiaries.filter(b => b.aiLetter).length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+  const exportEstatePlan = () => {
+    let csv = '--- INHERITANCE OS ESTATE REPORT ---\n\nASSETS\nType,Name,Institution,Ticker/Qty,Value (INR)\n';
+    assets.forEach(a => {
+      csv += `${a.type},"${a.name}","${a.institution||''}","${a.ticker?`${a.ticker} (${a.quantity})`:''}",${a.value}\n`;
+    });
+    
+    csv += '\nBENEFICIARIES\nName,Relationship,Allocation,Letters Ready\n';
+    beneficiaries.forEach(b => {
+      csv += `"${b.name}","${b.relationship}",${b.allocationPercent}%,${b.aiLetter?'Yes':'No'}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Inheritance_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Estate Report exported as CSV ✓');
+  };
 
   const CHECKLIST = [
     { label: 'Assets documented', done: assets.length > 0, link: '/dashboard/assets' },
@@ -130,6 +152,10 @@ export default function Dashboard() {
             <span className={`status-dot ${daysSinceCheckIn < 30 ? 'status-dot-green' : 'status-dot-amber'}`} />
             Check-in: {daysSinceCheckIn}d ago
           </span>
+          <button onClick={exportEstatePlan} className="btn btn-ghost gap-2">
+            <Download size={14} />
+            Export Plan
+          </button>
           <button onClick={() => nav('/dashboard/letters')} className="btn btn-primary gap-2">
             <Sparkles size={14} />
             Generate Letters

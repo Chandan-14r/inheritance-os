@@ -60,4 +60,16 @@ router.put('/profile', async (req, res) => {
   }
 });
 
+import { checkDeadManSwitches } from '../services/cron.js';
+
+router.post('/test-cron', async (req, res) => {
+  try {
+    // Hidden endpoint to trigger the cron evaluation immediately for demo/testing
+    await checkDeadManSwitches();
+    res.json({ success: true, message: 'Cron evaluation triggered manually' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

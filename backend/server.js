@@ -7,6 +7,7 @@ import assetRoutes from './routes/assets.js';
 import beneficiaryRoutes from './routes/beneficiaries.js';
 import aiRoutes from './routes/ai.js';
 import simulatorRoutes from './routes/simulator.js';
+import './services/cron.js'; // Initialize cron jobs immediately
 
 const app = express();
 
