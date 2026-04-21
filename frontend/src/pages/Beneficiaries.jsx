@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { useData } from '../DataContext';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Plus, Trash2, UserCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const GRADIENT_COLORS = [
-  'from-indigo-500 to-purple-500', 'from-pink-500 to-rose-500',
-  'from-cyan-500 to-blue-500', 'from-amber-500 to-orange-500', 'from-green-500 to-emerald-500',
-];
+const RELATIONSHIPS = ['Spouse', 'Son', 'Daughter', 'Father', 'Mother', 'Brother', 'Sister', 'Other'];
+const BCOLORS = ['#4B6EF5', '#00C48C', '#F59E0B', '#F6465D', '#8B5CF6', '#06B6D4'];
 
 export default function Beneficiaries() {
   const { beneficiaries, addBeneficiary, deleteBeneficiary, totalWorth, totalAllocation } = useData();
@@ -19,10 +17,7 @@ export default function Beneficiaries() {
   const submit = (e) => {
     e.preventDefault();
     const pct = Number(form.allocationPercent);
-    if (totalAllocation + pct > 100) {
-      toast.error(`Only ${100 - totalAllocation}% remaining to allocate`);
-      return;
-    }
+    if (totalAllocation + pct > 100) { toast.error(`Only ${100 - totalAllocation}% remaining`); return; }
     if (pct <= 0) { toast.error('Allocation must be > 0%'); return; }
     if (!form.name) { toast.error('Name is required'); return; }
     addBeneficiary({ ...form, allocationPercent: pct });
@@ -38,112 +33,174 @@ export default function Beneficiaries() {
     }
   };
 
+  const remaining = 100 - totalAllocation;
+
   return (
-    <div>
-      <div className="flex justify-between items-start mb-2">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Beneficiaries</h1>
-          <p className="text-slate-400 mt-1">Manage who inherits your ₹{totalWorth.toLocaleString('en-IN')} legacy</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Beneficiaries</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            Manage inheritance of your{' '}
+            <span className="font-mono-num font-bold" style={{ color: 'var(--accent-green)' }}>
+              ₹{totalWorth.toLocaleString('en-IN')}
+            </span>{' '}
+            estate
+          </p>
         </div>
-        <button onClick={() => setShow(!show)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl transition-all font-medium text-sm hover:shadow-lg hover:shadow-indigo-500/25">
-          <Plus size={18} />{show ? 'Cancel' : 'Add'}
+        <button onClick={() => setShow(v => !v)} className={`btn ${show ? 'btn-ghost' : 'btn-primary'}`}>
+          <Plus size={16} className={show ? 'rotate-45 transition-transform' : ''} />
+          {show ? 'Cancel' : 'Add Beneficiary'}
         </button>
       </div>
 
-      {/* Allocation bar */}
-      <div className="glass-card rounded-xl p-4 mb-6">
-        <div className="flex justify-between items-center mb-2">
-          <span className={`text-sm font-semibold ${totalAllocation === 100 ? 'text-green-400' : 'text-amber-400'}`}>
-            {totalAllocation === 100 ? '✅ Fully allocated' : `⚠ ${totalAllocation}% allocated — ${100 - totalAllocation}% remaining`}
+      {/* Allocation overview card */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Estate Allocation</span>
+          <span className="font-mono-num text-sm font-bold" style={{ color: totalAllocation === 100 ? 'var(--accent-green)' : 'var(--accent-amber)' }}>
+            {totalAllocation}/100%
           </span>
-          <span className="text-sm text-slate-400">{totalAllocation}/100%</span>
         </div>
-        <div className="h-3 bg-[#151a2e] rounded-full overflow-hidden flex">
+
+        {/* Stacked bar */}
+        <div className="h-3 rounded-full overflow-hidden flex gap-px mb-3"
+          style={{ background: 'rgba(255,255,255,0.06)' }}>
           {beneficiaries.map((b, i) => (
             <motion.div key={b._id}
               initial={{ width: 0 }} animate={{ width: `${b.allocationPercent}%` }}
               transition={{ duration: 0.8, delay: i * 0.1 }}
-              className={`h-full bg-gradient-to-r ${GRADIENT_COLORS[i % GRADIENT_COLORS.length]}`}
+              className="h-full"
+              style={{ background: BCOLORS[i % BCOLORS.length], minWidth: 4 }}
               title={`${b.name}: ${b.allocationPercent}%`}
             />
           ))}
-          {totalAllocation < 100 && (
-            <div className="h-full flex-1 bg-[#1a1f35]" title={`${100 - totalAllocation}% unallocated`} />
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {beneficiaries.map((b, i) => (
+            <div key={b._id} className="flex items-center gap-1.5 text-xs">
+              <div className="w-2 h-2 rounded-full" style={{ background: BCOLORS[i % BCOLORS.length] }} />
+              <span style={{ color: 'var(--text-secondary)' }}>{b.name}</span>
+              <span className="font-mono-num" style={{ color: BCOLORS[i % BCOLORS.length] }}>{b.allocationPercent}%</span>
+              <span style={{ color: 'var(--text-muted)' }}>= {fmt(totalWorth * b.allocationPercent / 100)}</span>
+            </div>
+          ))}
+          {remaining > 0 && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <div className="w-2 h-2 rounded-full" style={{ background: 'var(--text-muted)' }} />
+              <span style={{ color: 'var(--text-muted)' }}>Unallocated: {remaining}%</span>
+            </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-          {beneficiaries.map((b, i) => (
-            <span key={b._id} className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${GRADIENT_COLORS[i % GRADIENT_COLORS.length]}`} />
-              {b.name} ({b.allocationPercent}% = {fmt(totalWorth * b.allocationPercent / 100)})
-            </span>
-          ))}
-        </div>
+
+        {totalAllocation === 100 && (
+          <div className="mt-3 flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--accent-green)' }}>
+            ✓ Fully allocated — great!
+          </div>
+        )}
       </div>
 
-      {show && (
-        <motion.form initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-          onSubmit={submit} className="glass-card p-6 rounded-2xl mb-6 grid grid-cols-2 gap-4">
-          <input required placeholder="Full Name" value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-            className="p-3 bg-[#0b1120] rounded-lg border border-[#1e293b] text-white placeholder-slate-500 text-sm focus:border-indigo-500/50 focus:outline-none transition-colors" />
-          <select value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })}
-            className="p-3 bg-[#0b1120] rounded-lg border border-[#1e293b] text-white text-sm" required>
-            <option value="">Select relationship</option>
-            <option value="Spouse">Spouse</option>
-            <option value="Son">Son</option>
-            <option value="Daughter">Daughter</option>
-            <option value="Father">Father</option>
-            <option value="Mother">Mother</option>
-            <option value="Brother">Brother</option>
-            <option value="Sister">Sister</option>
-            <option value="Other">Other</option>
-          </select>
-          <input type="email" placeholder="Email address" value={form.email}
-            onChange={e => setForm({ ...form, email: e.target.value })}
-            className="p-3 bg-[#0b1120] rounded-lg border border-[#1e293b] text-white placeholder-slate-500 text-sm focus:border-indigo-500/50 focus:outline-none transition-colors" />
-          <input required type="number" min="1" max={100 - totalAllocation}
-            placeholder={`Allocation % (max ${100 - totalAllocation}%)`} value={form.allocationPercent}
-            onChange={e => setForm({ ...form, allocationPercent: e.target.value })}
-            className="p-3 bg-[#0b1120] rounded-lg border border-[#1e293b] text-white placeholder-slate-500 text-sm focus:border-indigo-500/50 focus:outline-none transition-colors" />
-          <button className="col-span-2 p-3 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg font-semibold transition-all text-sm">
-            Add Beneficiary
-          </button>
-        </motion.form>
-      )}
-
-      <div className="grid grid-cols-3 gap-4">
-        {beneficiaries.map((b, i) => (
-          <motion.div key={b._id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.1 }}
-            className="glass-card p-6 rounded-2xl group">
-            <div className="flex justify-between">
-              <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${GRADIENT_COLORS[i % GRADIENT_COLORS.length]} flex items-center justify-center text-2xl font-bold shadow-lg`}>
-                {b.name[0]}
+      {/* Add Form */}
+      <AnimatePresence>
+        {show && (
+          <motion.form
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            onSubmit={submit} className="card p-6"
+          >
+            <h3 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>New Beneficiary</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>Full Name *</label>
+                <input required className="input-field" placeholder="Priya Sharma" value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })} />
               </div>
-              <button onClick={() => handleDelete(b._id, b.name)}
-                className="text-red-400/50 hover:text-red-400 transition-colors h-fit opacity-0 group-hover:opacity-100">
-                <Trash2 size={16} />
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>Relationship *</label>
+                <select required className="input-field" value={form.relationship}
+                  onChange={e => setForm({ ...form, relationship: e.target.value })}>
+                  <option value="">Select...</option>
+                  {RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>Email Address</label>
+                <input type="email" className="input-field" placeholder="priya@example.com" value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>Allocation % (max {remaining}%) *</label>
+                <input required type="number" min="1" max={remaining} className="input-field font-mono-num"
+                  placeholder={`e.g. ${remaining}`} value={form.allocationPercent}
+                  onChange={e => setForm({ ...form, allocationPercent: e.target.value })} />
+              </div>
+              <button type="submit" className="col-span-2 btn btn-primary py-3">
+                Add Beneficiary
               </button>
             </div>
-            <div className="mt-4 text-xl font-bold">{b.name}</div>
-            <div className="text-slate-400 text-sm">{b.relationship}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{b.email}</div>
-            <div className="mt-4">
-              <div className="text-3xl font-bold gradient-text">{b.allocationPercent}%</div>
-              <div className="text-xs text-slate-500">≈ {fmt(totalWorth * b.allocationPercent / 100)}</div>
-            </div>
-            <div className="mt-2 text-xs">
-              {b.aiLetter ? <span className="text-green-400">✉️ Letter generated</span> : <span className="text-slate-500">📝 No letter yet</span>}
-            </div>
-          </motion.div>
-        ))}
+          </motion.form>
+        )}
+      </AnimatePresence>
+
+      {/* Beneficiary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <AnimatePresence>
+          {beneficiaries.map((b, i) => {
+            const color = BCOLORS[i % BCOLORS.length];
+            const inheritance = totalWorth * b.allocationPercent / 100;
+            return (
+              <motion.div
+                key={b._id}
+                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ delay: i * 0.06 }}
+                className="card card-hover p-6 group relative"
+              >
+                <button
+                  onClick={() => handleDelete(b._id, b.name)}
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity btn btn-ghost p-1.5"
+                  style={{ color: 'var(--accent-red)' }}
+                >
+                  <Trash2 size={14} />
+                </button>
+
+                {/* Avatar */}
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold text-white mb-4" style={{ background: color }}>
+                  {b.name[0]}
+                </div>
+
+                <div className="font-bold text-lg mb-0.5" style={{ color: 'var(--text-primary)' }}>{b.name}</div>
+                <div className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>{b.relationship}</div>
+                <div className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>{b.email || '—'}</div>
+
+                {/* Allocation */}
+                <div className="p-3 rounded-xl" style={{ background: `${color}12`, border: `1px solid ${color}25` }}>
+                  <div className="text-3xl font-bold font-mono-num mb-0.5" style={{ color }}>
+                    {b.allocationPercent}%
+                  </div>
+                  <div className="text-xs font-mono-num" style={{ color: 'var(--text-muted)' }}>
+                    ≈ {fmt(inheritance)} · {(inheritance / 10000000).toFixed(2)}Cr
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: b.aiLetter ? 'var(--accent-green)' : 'var(--text-muted)' }}>
+                  {b.aiLetter ? '✉ AI Letter Ready' : '○ No letter yet'}
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
 
       {beneficiaries.length === 0 && !show && (
-        <div className="glass-card rounded-2xl p-12 text-center">
-          <p className="text-lg text-slate-400 mb-2">No beneficiaries yet</p>
-          <button onClick={() => setShow(true)} className="text-indigo-400 hover:text-indigo-300 transition-colors">+ Add your first beneficiary</button>
+        <div className="card p-16 text-center">
+          <UserCircle size={48} className="mx-auto mb-4 opacity-20" style={{ color: 'var(--text-muted)' }} />
+          <p className="text-lg font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>No beneficiaries yet</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>Add family members who will inherit your estate</p>
+          <button onClick={() => setShow(true)} className="btn btn-primary">
+            <Plus size={16} /> Add First Beneficiary
+          </button>
         </div>
       )}
     </div>

@@ -1,19 +1,52 @@
 import { useData } from '../DataContext';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { motion } from 'framer-motion';
-import { Wallet, AlertTriangle, Users, Shield, TrendingUp, ArrowUpRight, CheckCircle, Bell } from 'lucide-react';
+import { Wallet, AlertTriangle, Users, Shield, TrendingUp, ArrowUpRight, CheckCircle, ArrowUp, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 
-const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444'];
+const COLORS = ['#4B6EF5', '#00C48C', '#F59E0B', '#F6465D', '#8B5CF6', '#06B6D4', '#EC4899'];
 
 const GROWTH_DATA = [
-  { month: 'Jan', value: 19500000 }, { month: 'Feb', value: 19800000 },
+  { month: 'Nov', value: 19000000 }, { month: 'Dec', value: 19500000 },
+  { month: 'Jan', value: 19200000 }, { month: 'Feb', value: 19800000 },
   { month: 'Mar', value: 20200000 }, { month: 'Apr', value: 20000000 },
   { month: 'May', value: 20800000 }, { month: 'Jun', value: 21200000 },
   { month: 'Jul', value: 21000000 }, { month: 'Aug', value: 21500000 },
-  { month: 'Sep', value: 21800000 }, { month: 'Oct', value: 22000000 },
-  { month: 'Nov', value: 22200000 }, { month: 'Dec', value: 22500000 },
+  { month: 'Sep', value: 21800000 }, { month: 'Oct', value: 22500000 },
 ];
+
+function AnimatedNumber({ value, prefix = '', suffix = '' }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = 0;
+    const end = value;
+    const duration = 1000;
+    const step = end / (duration / 16);
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= end) { setDisplay(end); clearInterval(timer); }
+      else setDisplay(Math.floor(start));
+    }, 16);
+    return () => clearInterval(timer);
+  }, [value]);
+  return <span>{prefix}{display.toLocaleString('en-IN')}{suffix}</span>;
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const v = payload[0].value;
+    return (
+      <div className="card p-3">
+        <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</div>
+        <div className="font-mono-num font-bold" style={{ color: 'var(--accent-green)' }}>
+          ₹{(v / 100000).toFixed(1)}L
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function Dashboard() {
   const { assets, beneficiaries, totalWorth, byType, estimatedTax, totalAllocation, profile } = useData();
@@ -21,175 +54,284 @@ export default function Dashboard() {
 
   const pieData = Object.entries(byType).map(([k, v]) => ({ name: k.replace('_', ' '), value: v }));
   const fmt = (n) => `₹${(n / 100000).toFixed(1)}L`;
+  const fmtCr = (n) => n > 10000000 ? `₹${(n / 10000000).toFixed(2)}Cr` : fmt(n);
 
   const daysSinceCheckIn = Math.floor((Date.now() - new Date(profile.lastCheckIn).getTime()) / (1000 * 60 * 60 * 24));
   const lettersGenerated = beneficiaries.filter(b => b.aiLetter).length;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   const CHECKLIST = [
     { label: 'Assets documented', done: assets.length > 0, link: '/dashboard/assets' },
     { label: 'Beneficiaries assigned', done: beneficiaries.length > 0, link: '/dashboard/beneficiaries' },
-    { label: 'Allocation equals 100%', done: totalAllocation === 100, link: '/dashboard/beneficiaries' },
+    { label: 'Allocation at 100%', done: totalAllocation === 100, link: '/dashboard/beneficiaries' },
     { label: 'AI letters generated', done: lettersGenerated === beneficiaries.length && beneficiaries.length > 0, link: '/dashboard/letters' },
-    { label: 'Dead man\'s switch enabled', done: profile.switchEnabled, link: '/dashboard/dead-man-switch' },
+    { label: "Dead man's switch on", done: profile.switchEnabled, link: '/dashboard/dead-man-switch' },
     { label: 'Executor assigned', done: !!profile.executorEmail, link: '/dashboard/dead-man-switch' },
   ];
   const completedTasks = CHECKLIST.filter(c => c.done).length;
+  const readinessPercent = Math.round((completedTasks / CHECKLIST.length) * 100);
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+  const KPI_CARDS = [
+    {
+      icon: Wallet, label: 'Net Worth', accent: 'kpi-card-green',
+      value: <span className="font-mono-num"><AnimatedNumber value={Math.round(totalWorth / 100000)} prefix="₹" suffix="L" /></span>,
+      sub: `${assets.length} assets · live tracked`,
+      subColor: 'var(--accent-green)',
+      bg: 'rgba(0,196,140,0.08)', border: 'rgba(0,196,140,0.15)',
+      link: '/dashboard/assets',
+    },
+    {
+      icon: AlertTriangle, label: 'Estate Tax Est.',
+      accent: estimatedTax > 0 ? 'kpi-card-red' : 'kpi-card-green',
+      value: <span className="font-mono-num">{fmtCr(estimatedTax)}</span>,
+      sub: estimatedTax > 0 ? 'Above ₹1Cr threshold' : 'No tax liability',
+      subColor: estimatedTax > 0 ? 'var(--accent-red)' : 'var(--accent-green)',
+      bg: estimatedTax > 0 ? 'rgba(246,70,93,0.07)' : 'rgba(0,196,140,0.05)',
+      border: estimatedTax > 0 ? 'rgba(246,70,93,0.15)' : 'rgba(0,196,140,0.12)',
+    },
+    {
+      icon: Users, label: 'Beneficiaries',
+      accent: totalAllocation === 100 ? 'kpi-card-blue' : 'kpi-card-amber',
+      value: <span className="font-mono-num">{beneficiaries.length}</span>,
+      sub: `${totalAllocation}% of estate allocated`,
+      subColor: totalAllocation === 100 ? '#818CF8' : 'var(--accent-amber)',
+      bg: 'rgba(75,110,245,0.06)', border: 'rgba(75,110,245,0.12)',
+      link: '/dashboard/beneficiaries',
+    },
+    {
+      icon: Shield, label: 'Letters Ready',
+      accent: lettersGenerated === beneficiaries.length && beneficiaries.length > 0 ? 'kpi-card-green' : 'kpi-card-amber',
+      value: <span className="font-mono-num">{lettersGenerated}<span style={{ color: 'var(--text-muted)', fontSize: '16px' }}>/{beneficiaries.length}</span></span>,
+      sub: lettersGenerated === beneficiaries.length && beneficiaries.length > 0 ? 'All generated ✓' : 'Needs attention',
+      subColor: lettersGenerated === beneficiaries.length && beneficiaries.length > 0 ? 'var(--accent-green)' : 'var(--accent-amber)',
+      bg: 'rgba(139,92,246,0.06)', border: 'rgba(139,92,246,0.12)',
+      link: '/dashboard/letters',
+    },
+  ];
 
   return (
-    <div>
-      <div className="flex justify-between items-start mb-8">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-1">{greeting}, {profile.name.split(' ')[0]} 👋</h1>
-          <p className="text-slate-400">Here's an overview of your financial legacy</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            {greeting}, {profile.name?.split(' ')[0] || 'there'} 👋
+          </h1>
+          <p className="mt-0.5 text-sm" style={{ color: 'var(--text-muted)' }}>
+            Here's an overview of your financial legacy
+          </p>
         </div>
-        <div className="flex items-center gap-2 glass px-4 py-2 rounded-xl">
-          <div className={`w-2 h-2 rounded-full ${daysSinceCheckIn < 30 ? 'bg-green-400' : daysSinceCheckIn < 60 ? 'bg-amber-400' : 'bg-red-400'} animate-pulse`} />
-          <span className="text-sm text-slate-300">Last check-in: {daysSinceCheckIn} day{daysSinceCheckIn !== 1 ? 's' : ''} ago</span>
+        <div className="flex items-center gap-2">
+          <span
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
+            style={{ background: daysSinceCheckIn < 30 ? 'rgba(0,196,140,0.1)' : 'rgba(245,158,11,0.1)', color: daysSinceCheckIn < 30 ? 'var(--accent-green)' : 'var(--accent-amber)', border: `1px solid ${daysSinceCheckIn < 30 ? 'rgba(0,196,140,0.2)' : 'rgba(245,158,11,0.2)'}` }}
+          >
+            <span className={`status-dot ${daysSinceCheckIn < 30 ? 'status-dot-green' : 'status-dot-amber'}`} />
+            Check-in: {daysSinceCheckIn}d ago
+          </span>
+          <button onClick={() => nav('/dashboard/letters')} className="btn btn-primary gap-2">
+            <Sparkles size={14} />
+            Generate Letters
+          </button>
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        {[
-          { icon: Wallet, label: 'Net Worth', value: fmt(totalWorth), sub: `${assets.length} assets total`, subColor: 'text-green-400', gradient: 'from-indigo-500 to-purple-500', link: '/dashboard/assets' },
-          { icon: AlertTriangle, label: 'Est. Estate Tax', value: fmt(estimatedTax), sub: totalWorth > 10000000 ? 'Above ₹1Cr threshold' : 'Below threshold', subColor: estimatedTax > 0 ? 'text-amber-400' : 'text-green-400', gradient: 'from-orange-500 to-red-500' },
-          { icon: Users, label: 'Beneficiaries', value: beneficiaries.length, sub: `${totalAllocation}% allocated`, subColor: totalAllocation === 100 ? 'text-green-400' : 'text-amber-400', gradient: 'from-pink-500 to-rose-500', link: '/dashboard/beneficiaries' },
-          { icon: Shield, label: 'Letters Ready', value: `${lettersGenerated}/${beneficiaries.length}`, sub: lettersGenerated === beneficiaries.length ? 'All generated ✓' : 'Needs attention', subColor: lettersGenerated === beneficiaries.length ? 'text-green-400' : 'text-amber-400', gradient: 'from-emerald-500 to-green-500', link: '/dashboard/letters' },
-        ].map((c, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-            className="glass-card p-5 rounded-2xl cursor-pointer" onClick={() => c.link && nav(c.link)}>
-            <div className="flex items-center justify-between mb-3">
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${c.gradient} flex items-center justify-center shadow-lg`}>
-                <c.icon size={18} />
-              </div>
-              <ArrowUpRight size={16} className="text-slate-500" />
+      {/* KPI grid */}
+      <div className="grid grid-cols-4 gap-4">
+        {KPI_CARDS.map((c, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07 }}
+            className={`kpi-card ${c.accent}`}
+            style={{ background: c.bg, borderColor: c.border }}
+            onClick={() => c.link && nav(c.link)}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <c.icon size={16} style={{ color: 'var(--text-muted)' }} />
+              <ArrowUpRight size={14} style={{ color: 'var(--text-muted)' }} />
             </div>
-            <div className="text-slate-400 text-xs uppercase tracking-wider font-semibold">{c.label}</div>
-            <div className="text-2xl font-bold mt-1">{c.value}</div>
-            <div className={`text-xs mt-1 ${c.subColor}`}>{c.sub}</div>
+            <div className="text-xs uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>{c.label}</div>
+            <div className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>{c.value}</div>
+            <div className="text-xs font-medium" style={{ color: c.subColor }}>{c.sub}</div>
           </motion.div>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-6 mb-6">
-        {/* Portfolio Growth */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="col-span-2 glass-card p-6 rounded-2xl">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold">Portfolio Growth (12 months)</h3>
-            <div className="flex items-center gap-1 text-green-400 text-sm font-semibold">
-              <TrendingUp size={14} /> +15.4%
+      {/* Charts row */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* Area Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          className="col-span-2 card p-6"
+        >
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Portfolio Growth</h3>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>12-month overview</p>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: 'rgba(0,196,140,0.1)', color: 'var(--accent-green)' }}>
+              <ArrowUp size={12} />
+              +15.4% YTD
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={GROWTH_DATA}>
+          <ResponsiveContainer width="100%" height={210}>
+            <AreaChart data={GROWTH_DATA} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
               <defs>
-                <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.8} />
-                  <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00C48C" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="#00C48C" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="month" stroke="#475569" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis stroke="#475569" tickLine={false} axisLine={false} tickFormatter={fmt} fontSize={11} />
-              <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '8px', color: 'white' }} formatter={fmt} />
-              <Bar dataKey="value" fill="url(#barGrad)" radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+              <XAxis dataKey="month" stroke="#2A3F60" tickLine={false} axisLine={false} fontSize={11} tick={{ fill: '#4E607D' }} />
+              <YAxis stroke="#2A3F60" tickLine={false} axisLine={false} tickFormatter={fmt} fontSize={10} width={55} tick={{ fill: '#4E607D' }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="value" stroke="#00C48C" strokeWidth={2} fill="url(#areaGrad)" dot={false} activeDot={{ r: 5, fill: '#00C48C', strokeWidth: 0 }} />
+            </AreaChart>
           </ResponsiveContainer>
         </motion.div>
 
         {/* Estate Readiness */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-          className="glass-card p-6 rounded-2xl">
-          <h3 className="text-lg font-bold mb-1">Estate Readiness</h3>
-          <p className="text-sm text-slate-400 mb-4">{completedTasks}/{CHECKLIST.length} completed</p>
-          <div className="flex justify-center mb-4">
-            <div className="relative w-24 h-24">
-              <svg className="w-24 h-24 -rotate-90">
-                <circle cx="48" cy="48" r="40" stroke="#1e293b" strokeWidth="6" fill="none" />
-                <circle cx="48" cy="48" r="40" stroke="url(#progressGrad)" strokeWidth="6" fill="none"
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+          className="card p-6"
+        >
+          <h3 className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Estate Readiness</h3>
+          <p className="text-xs mb-5" style={{ color: 'var(--text-muted)' }}>{completedTasks} of {CHECKLIST.length} steps complete</p>
+
+          {/* Circular progress */}
+          <div className="flex justify-center mb-5">
+            <div className="relative w-28 h-28">
+              <svg viewBox="0 0 100 100" className="w-28 h-28 -rotate-90">
+                <circle cx="50" cy="50" r="42" stroke="#161E30" strokeWidth="8" fill="none" />
+                <circle cx="50" cy="50" r="42"
+                  stroke="url(#ringGrad)" strokeWidth="8" fill="none"
                   strokeLinecap="round"
-                  strokeDasharray={`${(completedTasks / CHECKLIST.length) * 251.2} 251.2`} />
+                  strokeDasharray={`${(completedTasks / CHECKLIST.length) * 263.9} 263.9`}
+                />
                 <defs>
-                  <linearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#6366f1" />
-                    <stop offset="100%" stopColor="#a78bfa" />
+                  <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#00C48C" />
+                    <stop offset="100%" stopColor="#06EAAA" />
                   </linearGradient>
                 </defs>
               </svg>
-              <div className="absolute inset-0 flex items-center justify-center text-xl font-bold">
-                {Math.round((completedTasks / CHECKLIST.length) * 100)}%
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold font-mono-num" style={{ color: 'var(--accent-green)' }}>{readinessPercent}%</span>
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>READY</span>
               </div>
             </div>
           </div>
+
           <div className="space-y-1.5">
             {CHECKLIST.map((item, i) => (
-              <div key={i} onClick={() => !item.done && nav(item.link)}
-                className={`flex items-center gap-2 text-sm p-1.5 rounded cursor-pointer hover:bg-white/5 transition-colors ${item.done ? 'text-slate-300' : 'text-slate-500'}`}>
+              <div
+                key={i}
+                onClick={() => !item.done && nav(item.link)}
+                className="flex items-center gap-2.5 py-1 px-2 rounded-lg transition-colors cursor-pointer hover:bg-[var(--bg-hover)]"
+              >
                 {item.done
-                  ? <CheckCircle size={14} className="text-green-400 shrink-0" />
-                  : <div className="w-3.5 h-3.5 rounded-full border border-slate-600 shrink-0" />}
-                <span className={item.done ? '' : 'opacity-60'}>{item.label}</span>
+                  ? <CheckCircle size={13} style={{ color: 'var(--accent-green)', flexShrink: 0 }} />
+                  : <div className="w-3 h-3 rounded-full border flex-shrink-0" style={{ borderColor: 'var(--text-muted)' }} />
+                }
+                <span className="text-xs" style={{ color: item.done ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{item.label}</span>
               </div>
             ))}
           </div>
         </motion.div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* Asset Distribution */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-          className="glass-card p-6 rounded-2xl">
-          <h3 className="text-lg font-bold mb-4">Asset Distribution</h3>
+      {/* Bottom row */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Donut */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+          className="card p-6"
+        >
+          <h3 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Asset Distribution</h3>
           {pieData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={95} paddingAngle={3}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                  {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <Tooltip formatter={fmt} contentStyle={{ background: '#0f172a', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '8px', color: 'white' }} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="flex items-center gap-4">
+              <ResponsiveContainer width={160} height={160}>
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={75} paddingAngle={4}>
+                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} strokeWidth={0} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => fmt(v)} contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', color: 'white', fontSize: '12px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-2">
+                {pieData.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                      <span className="text-xs capitalize" style={{ color: 'var(--text-secondary)' }}>{d.name}</span>
+                    </div>
+                    <span className="text-xs font-mono-num font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(d.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
-            <div className="h-[250px] flex items-center justify-center text-slate-400 cursor-pointer" onClick={() => nav('/dashboard/assets')}>
-              <p>Click here to add your first asset →</p>
+            <div className="h-40 flex flex-col items-center justify-center" style={{ color: 'var(--text-muted)' }}>
+              <Wallet size={32} className="mb-2 opacity-30" />
+              <p className="text-sm cursor-pointer hover:text-indigo-400 transition-colors" onClick={() => nav('/dashboard/assets')}>Add assets to see distribution →</p>
             </div>
           )}
         </motion.div>
 
-        {/* Inheritance Allocation */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
-          className="glass-card p-6 rounded-2xl">
-          <h3 className="text-lg font-bold mb-4">Inheritance Allocation</h3>
-          {beneficiaries.length > 0 ? beneficiaries.map((b, i) => {
-            const colors = ['from-indigo-500 to-purple-500', 'from-pink-500 to-rose-500', 'from-cyan-500 to-blue-500', 'from-amber-500 to-orange-500'];
-            return (
-              <div key={b._id} className="mb-5">
-                <div className="flex justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${colors[i % colors.length]} flex items-center justify-center text-xs font-bold`}>{b.name[0]}</div>
-                    <span className="font-medium">{b.name} <span className="text-slate-500 text-sm">({b.relationship})</span></span>
+        {/* Allocation */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
+          className="card p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Inheritance Allocation</h3>
+            <span className="badge" style={{ background: totalAllocation === 100 ? 'rgba(0,196,140,0.1)' : 'rgba(245,158,11,0.1)', color: totalAllocation === 100 ? 'var(--accent-green)' : 'var(--accent-amber)', border: `1px solid ${totalAllocation === 100 ? 'rgba(0,196,140,0.2)' : 'rgba(245,158,11,0.2)'}` }}>
+              {totalAllocation}% Allocated
+            </span>
+          </div>
+          {beneficiaries.length > 0 ? (
+            <div className="space-y-4">
+              {beneficiaries.map((b, i) => {
+                const bcolor = COLORS[i % COLORS.length];
+                return (
+                  <div key={b._id}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: bcolor }}>
+                          {b.name[0]}
+                        </div>
+                        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{b.name}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({b.relationship})</span>
+                      </div>
+                      <span className="text-sm font-mono-num font-bold" style={{ color: bcolor }}>{b.allocationPercent}%</span>
+                    </div>
+                    <div className="progress-track">
+                      <motion.div
+                        className="progress-fill"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${b.allocationPercent}%` }}
+                        transition={{ duration: 1.2, delay: 0.6 + i * 0.15, ease: 'easeOut' }}
+                        style={{ background: bcolor }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>≈ {fmt(totalWorth * b.allocationPercent / 100)}</span>
+                      <span className="text-[11px]" style={{ color: b.aiLetter ? 'var(--accent-green)' : 'var(--text-muted)' }}>
+                        {b.aiLetter ? '✉ Letter ready' : '○ Letter needed'}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-bold text-indigo-400">{b.allocationPercent}%</span>
-                </div>
-                <div className="h-2.5 bg-[#151a2e] rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }} animate={{ width: `${b.allocationPercent}%` }}
-                    transition={{ duration: 1.2, delay: 0.6 + i * 0.15 }}
-                    className={`h-full bg-gradient-to-r ${colors[i % colors.length]} rounded-full`}
-                  />
-                </div>
-                <div className="text-xs text-slate-500 mt-1">
-                  ≈ {fmt(totalWorth * b.allocationPercent / 100)} • {b.aiLetter ? '✉️ Letter ready' : '📝 Letter needed'}
-                </div>
-              </div>
-            );
-          }) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-400 cursor-pointer" onClick={() => nav('/dashboard/beneficiaries')}>
-              <p>Click here to add beneficiaries →</p>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="h-40 flex flex-col items-center justify-center" style={{ color: 'var(--text-muted)' }}>
+              <Users size={32} className="mb-2 opacity-30" />
+              <p className="text-sm cursor-pointer hover:text-indigo-400 transition-colors" onClick={() => nav('/dashboard/beneficiaries')}>Add beneficiaries →</p>
             </div>
           )}
         </motion.div>
